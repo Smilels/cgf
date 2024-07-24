@@ -10,6 +10,7 @@ import torch.nn.functional as F
 import trimesh
 from pytorch3d.structures import Meshes
 from torch import nn
+from IPython import embed
 
 try:
     from pytorch3d.ops import knn_points

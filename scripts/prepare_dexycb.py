@@ -14,6 +14,7 @@ import numpy as np
 import yaml
 from scipy.spatial.transform import Rotation as Rot
 from tqdm import tqdm
+from IPython import embed
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -38,15 +39,16 @@ def extract_meta(data_root, moving_threshold=0.004):
         with open(meta_path, "r") as f:
             meta_item = yaml.safe_load(f)
         pose_npz = np.load(pose_path)
-
         mano_calib_path = os.path.join(data_root, "calibration", f"mano_{meta_item['mano_calib'][0]}", "mano.yml")
         with open(mano_calib_path, "r") as f:
             betas = yaml.safe_load(f)["betas"]
 
+        # 6D pose of each object. quaternion + translation
         pose_y = pose_npz["pose_y"]
         pose_m = pose_npz["pose_m"]
         ycb_ids = meta_item["ycb_ids"]
 
+        # find which object is moving, which ones are static
         equal_flags = np.all(np.all(pose_y == pose_y[0], axis=2), axis=0)
 
         # all seqs in dex-ycb contain only one moving object
@@ -70,6 +72,7 @@ def extract_meta(data_root, moving_threshold=0.004):
         end_frame = int(np.argmax(np.any(static_flags, axis=1))) - 1
         seq_path = os.path.join(subject_id, seq_id)
 
+        # If the image does not have a visible hand or the annotation does not exist, `pose_m` will be all `0`.
         valid_mano_flags = np.all(pose_m == 0, axis=2)[:, 0]
         start_frame = int(np.argmax(np.logical_not(valid_mano_flags)))
         if start_frame > end_frame:
@@ -124,6 +127,7 @@ def transform_pose_m(data_root, mano_dir, meta_item):
         pose_m_item = pose_m[frame_idx][0].copy()
         q, t = pose_y_item[:4], pose_y_item[4:]
         rot_object = Rot.from_quat(q)
+
         inv_rot_object = rot_object.inv()
         inv_tl_object = rot_object.inv().apply(-t)
 

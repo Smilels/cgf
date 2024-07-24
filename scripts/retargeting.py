@@ -10,6 +10,10 @@ import torch
 import transforms3d.euler
 from manopth.manolayer import ManoLayer
 
+from IPython import embed
+# workaround to carry embedding sessions local into process globals
+globals().update(locals())
+
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from cgf.robotics import KinematicsLayer, load_joint_limits, rescale_urdf
@@ -50,6 +54,7 @@ def batch_retargeting(pose_m_dataset, betas_dataset, num_valid_frames, target_ma
     full_qpos = torch.zeros(batch_size, 22, device=DEVICE, dtype=DTYPE)
     full_qpos[:, 6:] = joint_limits.mean(1).unsqueeze(0).repeat(batch_size, 1)
 
+    # pose_m[0, 48:51] stores the translation, pose_m[:, 0:48] stores the MANO pose, 15 finger joints axis-angle + 1 wrist joint axis-angle
     full_qpos[:, 0:3] = pose_m_dataset[:, 0, 48:51].clone()
     mano_rot_axisangle = pose_m_dataset[:, 0, 0:3].clone()
     mano_rot_mat = axis_angle_to_matrix(mano_rot_axisangle)
@@ -58,6 +63,7 @@ def batch_retargeting(pose_m_dataset, betas_dataset, num_valid_frames, target_ma
     mano2robot = left_mano2robot if target_mano_side == "left" else right_mano2robot
     mano2robot = mano2robot.unsqueeze(0).repeat(batch_size, 1, 1).to(DTYPE).to(DEVICE)
     full_qpos[:, 3:6] = matrix_to_axis_angle(torch.bmm(mano_rot_mat, mano2robot))
+    # the first six parameters of full_qpos are the global pose of the wrist
     full_qpos = full_qpos.clone()
 
     result = np.zeros(pose_m_dataset.shape[:2] + (22,))
@@ -66,13 +72,14 @@ def batch_retargeting(pose_m_dataset, betas_dataset, num_valid_frames, target_ma
         print(f"frame: {frame_idx}, valid num: {torch.count_nonzero(mask).item()}")
         mano_pose = pose_m_dataset[mask, frame_idx]
         betas = betas_dataset[mask]
-
+        # shape of betas is batch_size * 10
         mano_verts, mano_joint = mano_layer(mano_pose[:, :48], betas, mano_pose[:, 48:51])
 
         mano_verts /= 1000
         mano_joint /= 1000
 
         cur_qpos = full_qpos[mask].clone().requires_grad_(True)
+        # cur_qpos is the optimzed parameters
         optimizer = torch.optim.Adam([cur_qpos], lr=0.01)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [100, 300], gamma=0.8)
 
@@ -94,7 +101,6 @@ def batch_retargeting(pose_m_dataset, betas_dataset, num_valid_frames, target_ma
 
         full_qpos[mask] = cur_qpos.detach()
         result[mask.cpu().numpy(), frame_idx] = cur_qpos.detach().cpu().numpy()
-
     return result
 
 
@@ -116,6 +122,7 @@ if __name__ == "__main__":
 
     with open(urdf_path, "r") as f:
         urdf_data = ElementTree.parse(f)
+    # why rescale to 0.8
     new_urdf_data = rescale_urdf(urdf_data, 0.8)
     new_urdf_str = ElementTree.tostring(new_urdf_data.getroot(), encoding="unicode")
     kinematics_layer = KinematicsLayer(
@@ -172,8 +179,8 @@ if __name__ == "__main__":
     pose_m_dataset = torch.from_numpy(pose_m_dataset).to(DTYPE).to(DEVICE)
     betas_dataset = torch.from_numpy(betas_dataset).to(DTYPE).to(DEVICE)
     num_valid_frames = torch.from_numpy(num_valid_frames).to(DTYPE).to(DEVICE)
-
     for aug_idx in range(0, 11):
         print(f"aug_idx: {aug_idx}")
         result = batch_retargeting(pose_m_dataset[:, aug_idx], betas_dataset, num_valid_frames, args.mano_side)
+        embed()
         np.savez_compressed(os.path.join(output_dir, f"{aug_idx}.npz"), qpos=result, aug_rot=aug_rots[:, aug_idx])

@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import viser
 from manopth.manolayer import ManoLayer
+from IPython import embed
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -46,7 +47,7 @@ def main(data_root: str, mano_side: Literal["left", "right"] = "left", seq_id: s
     valid_frames_range[:, 1] += 1
 
     if seq_id is None:
-        seq_id = sorted_seq_ids[0]
+        seq_id = sorted_seq_ids[1]
     assert seq_id in sorted_seq_ids
     begin_f, end_f = valid_frames_range[sorted_seq_ids.index(seq_id)]
 
@@ -106,6 +107,6 @@ def main(data_root: str, mano_side: Literal["left", "right"] = "left", seq_id: s
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", type=str, default=os.path.join(os.path.dirname(__file__), "..", "data"))
-    parser.add_argument("--mano_side", type=str, choices=["left", "right"], default="left")
+    parser.add_argument("--mano_side", type=str, choices=["left", "right"], default="right")
     args = parser.parse_args()
     main(args.data_root, args.mano_side)

@@ -1,0 +1,3 @@
+Fri May 31 11:49:49 2024
+WARNING: mju_openResource: unknown file '/home/shuang/software/refine-retargeting-dex-ycb-toolkit/mujoco/../assets/includes/defaults_ycb.xml'
+
